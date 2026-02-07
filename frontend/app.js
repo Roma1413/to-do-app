@@ -1,8 +1,15 @@
-// API URLs
+// API URLs - Automatically detects environment
+// For production: Update BACKEND_URL below with your Render backend URL
+// For development: Uses localhost automatically
+const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const BACKEND_URL = isDevelopment 
+    ? 'http://localhost:5000' 
+    : 'https://todo-backend.onrender.com'; // ⚠️ UPDATE THIS with your Render backend URL
+
 const API = {
-    auth: 'http://localhost:5000/api/auth',
-    todos: 'http://localhost:5000/api/todos',
-    categories: 'http://localhost:5000/api/categories'
+    auth: `${BACKEND_URL}/api/auth`,
+    todos: `${BACKEND_URL}/api/todos`,
+    categories: `${BACKEND_URL}/api/categories`
 };
 
 // State
