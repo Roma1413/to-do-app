@@ -25,7 +25,7 @@ const corsOptions = {
             'http://localhost:5000',
             'http://127.0.0.1:5000',
             process.env.FRONTEND_URL, // Your Render frontend URL
-            'https://todo-frontend.onrender.com' // Update with your actual frontend URL
+            'https://to-do-app-rrmj.onrender.com' // Update with your actual frontend URL
         ].filter(Boolean); // Remove undefined values
         
         if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
