@@ -12,6 +12,9 @@ let isLoginMode = true;
 let editingTodoId = null;
 let editingCategoryId = null;
 let isSubmittingCategory = false;
+let allTodos = []; // Store all todos globally
+let allCategories = []; // Store all categories globally
+let expandedCategoryId = null; // Track which category is expanded
 
 // DOM Elements
 const authButtons = document.getElementById('auth-buttons');
@@ -47,7 +50,10 @@ function setupEventListeners() {
     closeModal.onclick = () => authModal.style.display = 'none';
     authForm.onsubmit = handleAuth;
     todoForm.onsubmit = handleTodoSubmit;
-    document.getElementById('refresh-btn').onclick = loadTodos;
+    document.getElementById('refresh-btn').onclick = () => {
+        loadCategories();
+        loadTodos();
+    };
     document.getElementById('cancel-btn').onclick = cancelEdit;
     
     // Category form - attach to button directly (only once)
@@ -132,7 +138,7 @@ async function handleAuth(e) {
         authModal.style.display = 'none';
         showAuthenticatedUI();
         loadCategories();
-        loadTodos();
+        loadTodos(); // Load todos to update counts
     } catch (error) {
         showError(error.message);
     }
@@ -151,7 +157,7 @@ function showAuthenticatedUI() {
     userInfo.style.display = 'block';
     userEmail.textContent = user.email;
     welcomeSection.style.display = 'none';
-    todosSection.style.display = 'block';
+    todosSection.style.display = 'none'; // Hide todos section - todos shown in categories
     categoriesSection.style.display = 'block';
     todoFormSection.style.display = 'block';
     
@@ -205,22 +211,62 @@ async function loadCategories() {
 }
 
 function displayCategories(categories) {
+    allCategories = categories; // Store globally
     const list = document.getElementById('categories-list');
     if (categories.length === 0) {
         list.innerHTML = '<p class="empty-message">No categories yet. Create your first category group above!</p>';
         return;
     }
-    list.innerHTML = '<h3 style="margin-bottom: 15px;">Your Category Groups:</h3>' + categories.map(cat => `
-        <div class="category-card" style="border-left-color: ${cat.color || '#667eea'}">
-            <h3>📁 ${escapeHtml(cat.name)}</h3>
-            <p>${escapeHtml(cat.description)}</p>
-            <button class="btn-primary" onclick="createTodoInCategory('${cat._id}', '${escapeHtml(cat.name)}')" style="margin-top: 10px;">+ Add Todo to This Category</button>
+    
+    list.innerHTML = '<h3 style="margin-bottom: 15px;">Your Category Groups (Click to view todos):</h3>' + categories.map(cat => {
+        const todosInCategory = allTodos.filter(todo => 
+            (todo.category?._id || todo.category) === cat._id
+        );
+        const isExpanded = expandedCategoryId === cat._id;
+        const catColor = cat.color || '#667eea';
+        
+        return `
+        <div class="category-card expandable" style="border-left-color: ${catColor}">
+            <div class="category-header" onclick="toggleCategory('${cat._id}')" style="cursor: pointer;">
+                <div>
+                    <h3>📁 ${escapeHtml(cat.name)} 
+                        <span class="todo-count">(${todosInCategory.length} ${todosInCategory.length === 1 ? 'todo' : 'todos'})</span>
+                    </h3>
+                    <p>${escapeHtml(cat.description)}</p>
+                </div>
+                <span class="expand-icon">${isExpanded ? '▼' : '▶'}</span>
+            </div>
+            
+            ${isExpanded ? `
+            <div class="category-content">
+                <!-- Search Box -->
+                <div class="search-box">
+                    <input type="text" 
+                           id="search-${cat._id}" 
+                           class="search-input" 
+                           placeholder="🔍 Search todos in this category..."
+                           oninput="filterTodosInCategory('${cat._id}', this.value)">
+                </div>
+                
+                <!-- Todos List -->
+                <div id="todos-${cat._id}" class="todos-in-category">
+                    ${displayTodosForCategory(cat._id, todosInCategory)}
+                </div>
+                
+                <!-- Add Todo Button -->
+                <button class="btn-primary" onclick="createTodoInCategory('${cat._id}', '${escapeHtml(cat.name)}')" style="margin-top: 15px;">
+                    + Add Todo to This Category
+                </button>
+            </div>
+            ` : ''}
+            
             <div class="category-actions">
                 <button class="btn-edit" onclick="editCategory('${cat._id}')">✏️ Edit</button>
                 <button class="btn-delete" onclick="deleteCategory('${cat._id}')">🗑️ Delete</button>
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function populateCategorySelect(categories) {
@@ -251,12 +297,6 @@ async function handleCategorySubmit(e) {
     
     isSubmittingCategory = true;
 
-    if (editingCategoryId) {
-        // This shouldn't happen, but just in case
-        console.log('Editing mode active, skipping create');
-        return;
-    }
-
     const nameInput = document.getElementById('category-name');
     const descriptionInput = document.getElementById('category-description');
     const colorInput = document.getElementById('category-color');
@@ -264,6 +304,7 @@ async function handleCategorySubmit(e) {
     if (!nameInput || !descriptionInput) {
         console.error('Category form inputs not found!', { nameInput: !!nameInput, descriptionInput: !!descriptionInput });
         showError('Form inputs not found. Please refresh the page.');
+        isSubmittingCategory = false;
         return;
     }
 
@@ -271,45 +312,83 @@ async function handleCategorySubmit(e) {
     const description = descriptionInput.value.trim();
     const color = colorInput ? colorInput.value : '#667eea';
 
-    console.log('Category data:', { name, description, color });
+    console.log('Category data:', { name, description, color, editingCategoryId });
 
     if (!name || !description) {
         showError('Please fill in all required fields');
+        isSubmittingCategory = false;
         return;
     }
 
     // Disable button during submission
     const submitBtn = document.getElementById('create-category-btn');
+    const originalText = submitBtn ? submitBtn.textContent : '';
+    
     if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Creating...';
+        submitBtn.textContent = editingCategoryId ? 'Updating...' : 'Creating...';
     }
 
     try {
-        console.log('Sending category creation request to:', API.categories);
-        const res = await fetch(API.categories, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ name, description, color })
-        });
-        
-        const data = await res.json();
-        console.log('Response status:', res.status, 'Response data:', data);
-        
-        if (!res.ok) {
-            throw new Error(data.error || 'Failed to create category');
+        // Check if we're editing or creating
+        if (editingCategoryId) {
+            // Update existing category
+            console.log('Updating category:', editingCategoryId);
+            const res = await fetch(`${API.categories}/${editingCategoryId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ name, description, color })
+            });
+            
+            const data = await res.json();
+            console.log('Update response status:', res.status, 'Response data:', data);
+            
+            if (!res.ok) {
+                throw new Error(data.error || 'Failed to update category');
+            }
+            
+            console.log('Category updated successfully!');
+            const updatedCategoryId = editingCategoryId; // Save before resetting
+            document.getElementById('category-form').reset();
+            editingCategoryId = null;
+            
+            // Collapse if this category was expanded
+            if (expandedCategoryId === updatedCategoryId) {
+                expandedCategoryId = null;
+            }
+            
+            loadCategories();
+            showError('Category updated successfully!', 'success');
+        } else {
+            // Create new category
+            console.log('Creating new category');
+            const res = await fetch(API.categories, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ name, description, color })
+            });
+            
+            const data = await res.json();
+            console.log('Response status:', res.status, 'Response data:', data);
+            
+            if (!res.ok) {
+                throw new Error(data.error || 'Failed to create category');
+            }
+            
+            console.log('Category created successfully!');
+            document.getElementById('category-form').reset();
+            loadCategories();
+            showError('Category created successfully!', 'success');
         }
-        
-        console.log('Category created successfully!');
-        document.getElementById('category-form').reset();
-        loadCategories();
-        showError('Category created successfully!', 'success');
     } catch (error) {
-        console.error('Category creation error:', error);
-        showError(error.message || 'Failed to create category. Please try again.');
+        console.error('Category operation error:', error);
+        showError(error.message || 'Failed to save category. Please try again.');
     } finally {
         // Re-enable button and allow new submissions
         isSubmittingCategory = false;
@@ -335,40 +414,12 @@ async function editCategory(id) {
         document.getElementById('category-color').value = cat.color || '#667eea';
         
         editingCategoryId = id;
-        const form = document.getElementById('category-form');
-        const submitBtn = form.querySelector('button[type="submit"]');
-        submitBtn.textContent = 'Update Category';
+        const submitBtn = document.getElementById('create-category-btn');
+        if (submitBtn) {
+            submitBtn.textContent = 'Update Category';
+        }
         
-        // Temporarily change form handler
-        form.onsubmit = async (e) => {
-            e.preventDefault();
-            const name = document.getElementById('category-name').value.trim();
-            const description = document.getElementById('category-description').value.trim();
-            const color = document.getElementById('category-color').value;
-
-            try {
-                const updateRes = await fetch(`${API.categories}/${editingCategoryId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ name, description, color })
-                });
-                if (!updateRes.ok) {
-                    const data = await updateRes.json();
-                    throw new Error(data.error || 'Failed to update');
-                }
-                form.reset();
-                submitBtn.textContent = 'Create Category';
-                form.onsubmit = handleCategorySubmit;
-                editingCategoryId = null;
-                loadCategories();
-            } catch (error) {
-                showError(error.message);
-            }
-        };
-        
+        // Scroll to form
         document.getElementById('categories-section').scrollIntoView({ behavior: 'smooth' });
     } catch (error) {
         showError(error.message);
@@ -387,7 +438,7 @@ async function deleteCategory(id) {
             throw new Error(data.error || 'Failed to delete');
         }
         loadCategories();
-        loadTodos(); // Reload todos in case any were deleted
+        loadTodos(); // Reload todos to update counts
     } catch (error) {
         showError(error.message);
     }
@@ -423,63 +474,90 @@ async function loadTodos() {
 }
 
 function displayTodos(todos) {
+    allTodos = todos; // Store todos globally
+    // Don't display todos here anymore - they'll be shown when category is expanded
+    // Just update the categories display to show todo counts
+    if (allCategories.length > 0) {
+        displayCategories(allCategories);
+    }
+}
+
+// Display todos for a specific category
+function displayTodosForCategory(categoryId, todos = null) {
+    // If todos not provided, filter from allTodos
+    if (!todos) {
+        todos = allTodos.filter(todo => 
+            (todo.category?._id || todo.category) === categoryId
+        );
+    }
+    
     if (todos.length === 0) {
-        todosList.innerHTML = '<p class="empty-message">No todos yet. Create a category first, then create todos in that category!</p>';
+        return '<p class="empty-message">No todos in this category yet. Click "Add Todo" to create one!</p>';
+    }
+    
+    return todos.map(todo => {
+        const isCompleted = todo.completed === true;
+        return `
+        <div class="todo-card ${todo.priority.toLowerCase()}-priority ${isCompleted ? 'completed' : ''}" data-id="${todo._id}">
+            <div class="todo-header-row">
+                <label class="complete-checkbox">
+                    <input type="checkbox" ${isCompleted ? 'checked' : ''} onchange="toggleTodoComplete('${todo._id}', this.checked)">
+                    <span class="checkmark"></span>
+                </label>
+                <div class="todo-content">
+                    <h4 class="${isCompleted ? 'completed-text' : ''}">${escapeHtml(todo.title)}</h4>
+                    <p class="${isCompleted ? 'completed-text' : ''}">${escapeHtml(todo.description)}</p>
+                </div>
+            </div>
+            <div class="todo-meta">
+                <span class="badge priority-badge">${escapeHtml(todo.priority)}</span>
+            </div>
+            <div class="todo-actions">
+                <button class="btn-edit" onclick="editTodo('${todo._id}')">✏️ Edit</button>
+                <button class="btn-delete" onclick="deleteTodo('${todo._id}')">🗑️ Delete</button>
+            </div>
+        </div>
+        `;
+    }).join('');
+}
+
+// Toggle category expansion
+function toggleCategory(categoryId) {
+    if (expandedCategoryId === categoryId) {
+        expandedCategoryId = null; // Collapse
+    } else {
+        expandedCategoryId = categoryId; // Expand
+    }
+    displayCategories(allCategories);
+}
+
+// Filter todos in a category based on search
+function filterTodosInCategory(categoryId, searchTerm) {
+    const todosContainer = document.getElementById(`todos-${categoryId}`);
+    if (!todosContainer) return;
+    
+    const allCategoryTodos = allTodos.filter(todo => 
+        (todo.category?._id || todo.category) === categoryId
+    );
+    
+    if (!searchTerm || searchTerm.trim() === '') {
+        // Show all todos if search is empty
+        todosContainer.innerHTML = displayTodosForCategory(categoryId, allCategoryTodos);
         return;
     }
     
-    // Group todos by category
-    const todosByCategory = {};
-    todos.forEach(todo => {
-        const catName = todo.category?.name || 'Uncategorized';
-        if (!todosByCategory[catName]) {
-            todosByCategory[catName] = {
-                category: todo.category,
-                todos: []
-            };
-        }
-        todosByCategory[catName].todos.push(todo);
-    });
+    // Filter todos by search term (title or description)
+    const searchLower = searchTerm.toLowerCase();
+    const filteredTodos = allCategoryTodos.filter(todo => 
+        todo.title.toLowerCase().includes(searchLower) ||
+        todo.description.toLowerCase().includes(searchLower)
+    );
     
-    // Display todos grouped by category
-    todosList.innerHTML = Object.keys(todosByCategory).map(catName => {
-        const group = todosByCategory[catName];
-        const catColor = group.category?.color || '#667eea';
-        return `
-            <div class="category-group" style="border-left-color: ${catColor}">
-                <h3 class="category-group-title">
-                    📁 ${escapeHtml(catName)}
-                    <span class="todo-count">(${group.todos.length} ${group.todos.length === 1 ? 'todo' : 'todos'})</span>
-                </h3>
-                <div class="todos-in-category">
-                    ${group.todos.map(todo => {
-                        const isCompleted = todo.completed === true;
-                        return `
-                        <div class="todo-card ${todo.priority.toLowerCase()}-priority ${isCompleted ? 'completed' : ''}" data-id="${todo._id}">
-                            <div class="todo-header-row">
-                                <label class="complete-checkbox">
-                                    <input type="checkbox" ${isCompleted ? 'checked' : ''} onchange="toggleTodoComplete('${todo._id}', this.checked)">
-                                    <span class="checkmark"></span>
-                                </label>
-                                <div class="todo-content">
-                                    <h4 class="${isCompleted ? 'completed-text' : ''}">${escapeHtml(todo.title)}</h4>
-                                    <p class="${isCompleted ? 'completed-text' : ''}">${escapeHtml(todo.description)}</p>
-                                </div>
-                            </div>
-                            <div class="todo-meta">
-                                <span class="badge priority-badge">${escapeHtml(todo.priority)}</span>
-                            </div>
-                            <div class="todo-actions">
-                                <button class="btn-edit" onclick="editTodo('${todo._id}')">✏️ Edit</button>
-                                <button class="btn-delete" onclick="deleteTodo('${todo._id}')">🗑️ Delete</button>
-                            </div>
-                        </div>
-                    `;
-                    }).join('')}
-                </div>
-            </div>
-        `;
-    }).join('');
+    if (filteredTodos.length === 0) {
+        todosContainer.innerHTML = '<p class="empty-message">No todos found matching your search.</p>';
+    } else {
+        todosContainer.innerHTML = displayTodosForCategory(categoryId, filteredTodos);
+    }
 }
 
 async function handleTodoSubmit(e) {
@@ -517,7 +595,11 @@ async function handleTodoSubmit(e) {
         if (!res.ok) throw new Error('Failed to save');
         todoForm.reset();
         cancelEdit();
-        loadTodos();
+        loadTodos(); // Reload to update counts
+        // If the category is expanded, refresh its display
+        if (expandedCategoryId) {
+            displayCategories(allCategories);
+        }
     } catch (error) {
         showError(error.message);
     }
@@ -554,7 +636,11 @@ async function deleteTodo(id) {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!res.ok) throw new Error('Failed to delete');
-        loadTodos();
+        loadTodos(); // Reload to update counts
+        // If the category is expanded, refresh its display
+        if (expandedCategoryId) {
+            displayCategories(allCategories);
+        }
     } catch (error) {
         showError(error.message);
     }
@@ -631,6 +717,10 @@ async function toggleTodoComplete(todoId, isCompleted) {
         
         // Reload todos to show updated status
         loadTodos();
+        // If the category is expanded, refresh its display
+        if (expandedCategoryId) {
+            displayCategories(allCategories);
+        }
     } catch (error) {
         console.error('Error toggling todo complete:', error);
         showError(error.message || 'Failed to update todo');
@@ -647,3 +737,5 @@ window.deleteTodo = deleteTodo;
 window.createTodoInCategory = createTodoInCategory;
 window.handleCategorySubmit = handleCategorySubmit;
 window.toggleTodoComplete = toggleTodoComplete;
+window.toggleCategory = toggleCategory;
+window.filterTodosInCategory = filterTodosInCategory;

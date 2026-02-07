@@ -42,8 +42,13 @@
 
         <!-- Categories Section -->
         <section id="categories-section" class="section" style="display: none;">
-            <h2>My Categories (Groups)</h2>
-            <p style="color: #666; margin-bottom: 20px;">Create category groups to organize your todos. Each category can contain multiple todos.</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h2 style="margin: 0;">My Categories (Groups)</h2>
+                    <p style="color: #666; margin-top: 5px;">Click on a category to view and search todos inside it.</p>
+                </div>
+                <button id="refresh-btn" class="btn-secondary">🔄 Refresh</button>
+            </div>
             
             <!-- Category Form -->
             <div class="category-form">
@@ -142,13 +147,11 @@
             </div>
         </section>
 
-        <!-- Todos Section (Logged in users) -->
+        <!-- Todos Section (Logged in users) - Now todos are shown within categories -->
         <section id="todos-section" class="section" style="display: none;">
-            <h2>My To-Do Items</h2>
-            <button id="refresh-btn" class="btn-secondary">🔄 Refresh</button>
             <div id="loading">Loading...</div>
             <div id="error-message"></div>
-            <div id="todos-list"></div>
+            <!-- Todos are now displayed within expanded categories -->
         </section>
     </div>
 
