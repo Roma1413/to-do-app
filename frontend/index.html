@@ -12,8 +12,8 @@
             <h1>📝 To-Do List Manager</h1>
             <p class="subtitle">Manage your tasks efficiently</p>
             <div id="auth-buttons">
-                <button id="login-btn" class="auth-btn">Login</button>
-                <button id="register-btn" class="auth-btn">Register</button>
+                <button id="login-btn" class="auth-btn" type="button" onclick="showAuthModalDirect(true)">Login</button>
+                <button id="register-btn" class="auth-btn" type="button" onclick="showAuthModalDirect(false)">Register</button>
             </div>
             <div id="user-info" style="display: none;">
                 <span id="user-email"></span>
@@ -35,7 +35,7 @@
                         <label>Password *</label>
                         <input type="password" id="auth-password" required>
                     </div>
-                    <button type="submit" id="auth-submit">Submit</button>
+                    <button type="submit" id="auth-submit" onclick="handleAuthDirect(event)">Submit</button>
                 </form>
             </div>
         </div>

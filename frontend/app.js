@@ -51,54 +51,94 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-    document.getElementById('login-btn').onclick = () => showAuthModal(true);
-    document.getElementById('register-btn').onclick = () => showAuthModal(false);
-    logoutBtn.onclick = logout;
-    closeModal.onclick = () => authModal.style.display = 'none';
-    authForm.onsubmit = handleAuth;
-    todoForm.onsubmit = handleTodoSubmit;
-    document.getElementById('refresh-btn').onclick = () => {
+    // Auth buttons - use inline onclick from HTML (already set)
+    // Just make sure the function exists globally
+    
+    // Other listeners
+    if (logoutBtn) logoutBtn.onclick = logout;
+    if (closeModal) closeModal.onclick = () => {
+        if (authModal) authModal.style.display = 'none';
+    };
+    
+    // Attach form submit handler - make sure it works
+    const form = document.getElementById('auth-form');
+    if (form) {
+        // Remove old listener first by cloning
+        const newForm = form.cloneNode(true);
+        form.parentNode.replaceChild(newForm, form);
+        
+        const freshForm = document.getElementById('auth-form');
+        
+        // Attach multiple ways to ensure it works
+        freshForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('✅ Form submit event triggered!');
+            handleAuth(e);
+        });
+        
+        freshForm.onsubmit = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('✅ Form onsubmit triggered!');
+            handleAuth(e);
+        };
+        
+        // Also attach to submit button directly
+        const submitBtn = document.getElementById('auth-submit');
+        if (submitBtn) {
+            const newBtn = submitBtn.cloneNode(true);
+            submitBtn.parentNode.replaceChild(newBtn, submitBtn);
+            
+            const freshBtn = document.getElementById('auth-submit');
+            freshBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('✅ Submit button click event!');
+                handleAuth(e);
+            });
+        }
+        
+        console.log('✅ Auth form submit handler attached (multiple ways)');
+    } else {
+        console.error('❌ Auth form not found!');
+    }
+    if (todoForm) todoForm.onsubmit = handleTodoSubmit;
+    
+    const refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn) refreshBtn.onclick = () => {
         loadCategories();
         loadTodos();
     };
-    document.getElementById('cancel-btn').onclick = cancelEdit;
     
-    // Category form - attach to button directly (only once)
+    const cancelBtn = document.getElementById('cancel-btn');
+    if (cancelBtn) cancelBtn.onclick = cancelEdit;
+    
+    // Category form
     const createCategoryBtn = document.getElementById('create-category-btn');
     if (createCategoryBtn) {
-        // Remove any existing listeners first
-        const newBtn = createCategoryBtn.cloneNode(true);
-        createCategoryBtn.parentNode.replaceChild(newBtn, createCategoryBtn);
-        
-        // Attach listener to the new button
-        document.getElementById('create-category-btn').addEventListener('click', (e) => {
+        createCategoryBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            e.stopPropagation();
-            console.log('Create Category button clicked!');
             handleCategorySubmit();
         });
-        console.log('Create Category button listener attached');
     }
     
-    // Also attach to form submit (prevent double submission)
     const categoryForm = document.getElementById('category-form');
     if (categoryForm) {
-        // Remove existing listeners
-        const newForm = categoryForm.cloneNode(true);
-        categoryForm.parentNode.replaceChild(newForm, categoryForm);
-        
-        document.getElementById('category-form').addEventListener('submit', (e) => {
+        categoryForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            e.stopPropagation();
-            console.log('Category form submit event');
             handleCategorySubmit();
         });
     }
     
+    // Close modal when clicking outside
     window.onclick = (e) => {
-        if (e.target === authModal) authModal.style.display = 'none';
+        if (e.target && e.target.id === 'auth-modal') {
+            if (authModal) authModal.style.display = 'none';
+        }
     };
 }
+
 
 // Auth Functions
 function checkAuth() {
@@ -112,42 +152,145 @@ function checkAuth() {
 }
 
 function showAuthModal(login) {
+    // Get elements fresh
+    const modal = document.getElementById('auth-modal');
+    const title = document.getElementById('modal-title');
+    const submit = document.getElementById('auth-submit');
+    const form = document.getElementById('auth-form');
+    
+    if (!modal) {
+        alert('Error: Modal not found. Please refresh the page.');
+        return;
+    }
+    
     isLoginMode = login;
-    modalTitle.textContent = login ? 'Login' : 'Register';
-    authSubmit.textContent = login ? 'Login' : 'Register';
-    authModal.style.display = 'block';
-    authForm.reset();
+    
+    if (title) title.textContent = login ? 'Login' : 'Register';
+    if (submit) submit.textContent = login ? 'Login' : 'Register';
+    
+    modal.style.display = 'block';
+    
+    if (form) form.reset();
 }
 
 async function handleAuth(e) {
-    e.preventDefault();
-    const email = document.getElementById('auth-email').value;
-    const password = document.getElementById('auth-password').value;
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    console.log('🔵 handleAuth called!');
+    console.log('🔵 isLoginMode:', isLoginMode);
+    
+    const emailInput = document.getElementById('auth-email');
+    const passwordInput = document.getElementById('auth-password');
+    
+    if (!emailInput || !passwordInput) {
+        const errorMsg = 'Error: Form inputs not found. Please refresh the page.';
+        console.error('❌', errorMsg);
+        alert(errorMsg);
+        return;
+    }
+    
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+
+    console.log('🔵 Email entered:', email ? 'Yes' : 'No');
+    console.log('🔵 Password entered:', password ? 'Yes' : 'No');
+
+    if (!email || !password) {
+        const errorMsg = 'Please enter both email and password';
+        console.error('❌', errorMsg);
+        showError(errorMsg);
+        alert(errorMsg);
+        return;
+    }
+
+    // Show loading state
+    const submitBtn = document.getElementById('auth-submit');
+    const originalText = submitBtn ? submitBtn.textContent : 'Submit';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = isLoginMode ? 'Logging in...' : 'Registering...';
+    }
 
     try {
         const endpoint = isLoginMode ? '/login' : '/register';
+        const url = API.auth + endpoint;
+        
+        console.log('🔵 Attempting to', isLoginMode ? 'login' : 'register');
+        console.log('🔵 URL:', url);
+        console.log('🔵 Email:', email);
+        
         const body = { email, password };
 
-        const res = await fetch(API.auth + endpoint, {
+        const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
 
+        console.log('🔵 Response status:', res.status);
+        console.log('🔵 Response ok:', res.ok);
+
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
+        console.log('🔵 Response data:', data);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to ' + (isLoginMode ? 'login' : 'register'));
+        }
+
+        if (!data.token || !data.user) {
+            throw new Error('Invalid response from server');
+        }
 
         token = data.token;
         user = data.user;
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
 
-        authModal.style.display = 'none';
+        console.log('✅ Success! Token saved, user logged in');
+        console.log('✅ Token:', token);
+        console.log('✅ User:', user);
+
+        // Close modal
+        const modal = document.getElementById('auth-modal');
+        if (modal) {
+            modal.style.display = 'none';
+            console.log('✅ Modal closed');
+        }
+        
+        // Update UI
+        console.log('✅ Updating UI...');
         showAuthenticatedUI();
+        
+        // Load data
+        console.log('✅ Loading categories and todos...');
         loadCategories();
-        loadTodos(); // Load todos to update counts
+        loadTodos();
+        
+        // Show success message
+        showError(isLoginMode ? 'Login successful! Welcome back!' : 'Registration successful! Welcome!', 'success');
+        
+        console.log('✅ Login/Register complete!');
     } catch (error) {
-        showError(error.message);
+        console.error('❌ Error:', error);
+        let errorMsg = error.message;
+        
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            errorMsg = 'Cannot connect to server. Make sure backend is running on ' + BACKEND_URL;
+        } else if (error.message.includes('CORS')) {
+            errorMsg = 'CORS error. Check backend CORS settings.';
+        }
+        
+        showError(errorMsg);
+        alert('Error: ' + errorMsg + '\n\nMake sure:\n1. Backend is running (npm start in backend folder)\n2. Backend URL is correct: ' + BACKEND_URL);
+    } finally {
+        // Restore button
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
     }
 }
 
@@ -160,13 +303,64 @@ function logout() {
 }
 
 function showAuthenticatedUI() {
-    authButtons.style.display = 'none';
-    userInfo.style.display = 'block';
-    userEmail.textContent = user.email;
-    welcomeSection.style.display = 'none';
-    todosSection.style.display = 'none'; // Hide todos section - todos shown in categories
-    categoriesSection.style.display = 'block';
-    todoFormSection.style.display = 'block';
+    console.log('🔵 showAuthenticatedUI called');
+    console.log('🔵 User:', user);
+    console.log('🔵 Token:', token);
+    
+    // Get elements fresh
+    const authBtns = document.getElementById('auth-buttons');
+    const userInf = document.getElementById('user-info');
+    const userEm = document.getElementById('user-email');
+    const welcome = document.getElementById('welcome-section');
+    const todos = document.getElementById('todos-section');
+    const categories = document.getElementById('categories-section');
+    const todoForm = document.getElementById('todo-form-section');
+    
+    if (!user || !token) {
+        console.error('❌ No user or token! Cannot show authenticated UI.');
+        alert('Error: Login failed. Please try again.');
+        return;
+    }
+    
+    // Hide login/register buttons
+    if (authBtns) {
+        authBtns.style.display = 'none';
+        console.log('✅ Auth buttons hidden');
+    }
+    
+    // Show user info
+    if (userInf) {
+        userInf.style.display = 'block';
+        console.log('✅ User info shown');
+    }
+    
+    if (userEm && user.email) {
+        userEm.textContent = user.email;
+        console.log('✅ User email set:', user.email);
+    }
+    
+    // Hide welcome section
+    if (welcome) {
+        welcome.style.display = 'none';
+    }
+    
+    // Hide todos section (todos shown in categories)
+    if (todos) {
+        todos.style.display = 'none';
+    }
+    
+    // Show categories and todo form
+    if (categories) {
+        categories.style.display = 'block';
+        console.log('✅ Categories section shown');
+    }
+    
+    if (todoForm) {
+        todoForm.style.display = 'block';
+        console.log('✅ Todo form section shown');
+    }
+    
+    console.log('✅ UI updated to authenticated state');
     
     // Re-attach category button listener when UI becomes visible
     setTimeout(() => {
@@ -663,18 +857,37 @@ function cancelEdit() {
 
 // Utility
 function showError(msg, type = 'error') {
-    errorMessage.textContent = msg;
-    if (type === 'success') {
-        errorMessage.style.background = '#d4edda';
-        errorMessage.style.color = '#155724';
-        errorMessage.style.border = '1px solid #c3e6cb';
-    } else {
-        errorMessage.style.background = '#fee';
-        errorMessage.style.color = '#c33';
-        errorMessage.style.border = '1px solid #fcc';
+    console.log('📢 showError called:', msg, type);
+    
+    const errorEl = document.getElementById('error-message');
+    if (!errorEl) {
+        console.error('Error message element not found!');
+        alert(msg); // Fallback to alert
+        return;
     }
-    errorMessage.style.display = 'block';
-    setTimeout(() => errorMessage.style.display = 'none', 5000);
+    
+    errorEl.textContent = msg;
+    if (type === 'success') {
+        errorEl.style.background = '#d4edda';
+        errorEl.style.color = '#155724';
+        errorEl.style.border = '1px solid #c3e6cb';
+    } else {
+        errorEl.style.background = '#fee';
+        errorEl.style.color = '#c33';
+        errorEl.style.border = '1px solid #fcc';
+    }
+    errorEl.style.display = 'block';
+    
+    // Also show in console
+    if (type === 'error') {
+        console.error('❌ Error:', msg);
+    } else {
+        console.log('✅ Success:', msg);
+    }
+    
+    setTimeout(() => {
+        if (errorEl) errorEl.style.display = 'none';
+    }, 5000);
 }
 
 function escapeHtml(text) {
@@ -737,6 +950,20 @@ async function toggleTodoComplete(todoId, isCompleted) {
 }
 
 // Make functions global for onclick
+// Global function for inline onclick
+window.showAuthModalDirect = function(login) {
+    showAuthModal(login);
+};
+
+// Direct handler for submit button (backup)
+window.handleAuthDirect = function(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    console.log('🔥 Submit button clicked directly!');
+    handleAuth(e);
+};
 window.editCategory = editCategory;
 window.deleteCategory = deleteCategory;
 window.editTodo = editTodo;

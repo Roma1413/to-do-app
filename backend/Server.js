@@ -13,7 +13,40 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(express.json());
-app.use(cors());
+
+// CORS Configuration - Allows frontend to make requests
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        // List of allowed origins
+        const allowedOrigins = [
+            'http://localhost:5000',
+            'http://127.0.0.1:5000',
+            process.env.FRONTEND_URL, // Your Render frontend URL
+            'https://todo-frontend.onrender.com' // Update with your actual frontend URL
+        ].filter(Boolean); // Remove undefined values
+        
+        if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+};
+
+// Use CORS - allow all in development, use options in production
+if (process.env.NODE_ENV === 'production') {
+    app.use(cors(corsOptions));
+} else {
+    // Development: allow all origins
+    app.use(cors({
+        origin: true,
+        credentials: true
+    }));
+}
 
 mongoose.connect(process.env.MONGODB_URL)
     .then(() => console.log('✅ Connected to MongoDB'))
