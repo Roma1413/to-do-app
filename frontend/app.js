@@ -12,7 +12,7 @@ const isDevelopment = window.location.hostname === 'localhost'
 // ⚠️ IMPORTANT: Update the Render URL below with your ACTUAL backend URL from Render dashboard!
 const BACKEND_URL = isDevelopment 
     ? 'http://localhost:5000' 
-    : 'https://todo-backend.onrender.com'; // ⚠️ UPDATE THIS - Should match your Render backend service URL
+    : 'https://to-do-app-back.onrender.com'; // ⚠️ UPDATE THIS - Should match your Render backend service URL
 
 // Log which URL is being used (for debugging)
 console.log('🌐 Environment:', isDevelopment ? 'Development (Local)' : 'Production (Render)');
