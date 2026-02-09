@@ -9,9 +9,14 @@ const isDevelopment = window.location.hostname === 'localhost'
     || window.location.hostname === '';
 
 // Use localhost for local development, Render URL for production
+// ⚠️ IMPORTANT: Update the Render URL below with your ACTUAL backend URL from Render dashboard!
 const BACKEND_URL = isDevelopment 
     ? 'http://localhost:5000' 
-    : 'https://todo-backend.onrender.com'; // ⚠️ UPDATE THIS with your actual Render backend URL
+    : 'https://to-do-app-back.onrender.com'; // ⚠️ UPDATE THIS - Should match your Render backend service URL
+
+// Log which URL is being used (for debugging)
+console.log('🌐 Environment:', isDevelopment ? 'Development (Local)' : 'Production (Render)');
+console.log('🌐 Backend URL:', BACKEND_URL);
 
 const API = {
     auth: `${BACKEND_URL}/api/auth`,
@@ -285,13 +290,24 @@ async function handleAuth(e) {
         let errorMsg = error.message;
         
         if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-            errorMsg = 'Cannot connect to server. Make sure backend is running on ' + BACKEND_URL;
+            if (isDevelopment) {
+                errorMsg = 'Cannot connect to local backend. Make sure:\n\n1. Backend is running: cd backend && npm start\n2. Backend is on port 5000\n3. Visit http://localhost:5000 to test';
+            } else {
+                errorMsg = 'Cannot connect to Render backend. Possible issues:\n\n1. Backend is sleeping (free tier) - wait 30 seconds\n2. Backend URL is wrong - check Render dashboard\n3. Backend not deployed\n\nCurrent URL: ' + BACKEND_URL + '\n\nTo fix: Update BACKEND_URL in frontend/app.js with your actual Render backend URL';
+            }
         } else if (error.message.includes('CORS')) {
             errorMsg = 'CORS error. Check backend CORS settings.';
         }
         
+        console.error('❌ Full error details:', {
+            message: error.message,
+            backendURL: BACKEND_URL,
+            isDevelopment: isDevelopment,
+            currentURL: window.location.href
+        });
+        
         showError(errorMsg);
-        alert('Error: ' + errorMsg + '\n\nMake sure:\n1. Backend is running (npm start in backend folder)\n2. Backend URL is correct: ' + BACKEND_URL);
+        alert('Error: ' + errorMsg);
     } finally {
         // Restore button
         if (submitBtn) {
